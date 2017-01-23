@@ -1,6 +1,7 @@
-script_details = ("kmeans.py",0.5)
+# encoding=utf-8
+script_details = ("kmeans.py",0.6)
 
-# COMMON SECTION VERSION 0.7
+# COMMON SECTION VERSION 0.8
 from pyspark.context import SparkContext
 from pyspark.sql.context import SQLContext
 from pyspark import AccumulatorParam
@@ -107,6 +108,7 @@ class DataModelTools(object):
         schema = df.dtypes[:]
         lookup = {}
         for i in range(0,len(schema)):
+            lookup[unicode(schema[i][0],"utf-8")] = i
             lookup[schema[i][0]] = i
 
         target_index = -1
@@ -174,7 +176,7 @@ class DataModelTools(object):
     def checkPredictors(dm,predictors,df):
         schema = {}
         for (name,type) in df.dtypes:
-            schema[name] = type
+            schema[unicode(name,"utf-8")] = type
         for predictor in predictors:
             if predictor not in schema:
                 raise Exception("Predictor %s is missing from input data"%(predictor))
@@ -225,7 +227,7 @@ class ModelBuildReporter(object):
                 predictor_list.append((predictor,"",DataModelTools.getFieldInformation(datamodel,predictor)))
             items.append(("Predictors",len(predictors),predictor_list))
 
-        s = ""
+        s = u""
         s += "Training Summary"+os.linesep
         s += os.linesep
         s += self.format(items)
@@ -233,7 +235,7 @@ class ModelBuildReporter(object):
         return s
 
     def format(self,items):
-        s = ""
+        s = u""
         if items:
             keylen = 0
             for item in items:
@@ -243,7 +245,8 @@ class ModelBuildReporter(object):
             for item in items:
                 key = item[0]
                 val = item[1]
-                s += "    "*self.indent + (key + ":").ljust(keylen+2," ") + str(val) + os.linesep
+                s += u"    "*self.indent + (unicode(key,"utf-8") + u":").ljust(keylen+2,u" ") + unicode(val) + os.linesep
+
                 if len(item) == 3:
                     self.indent += 1
                     s += self.format(item[2])
@@ -252,9 +255,10 @@ class ModelBuildReporter(object):
 
 # COMMON END
 
+
 import json
 ascontext=None
-try:
+if len(sys.argv) < 2 or sys.argv[1] != "-test":
     import spss.pyspark.runtime
     ascontext = spss.pyspark.runtime.getContext()
     sc = ascontext.getSparkContext()
@@ -272,14 +276,14 @@ try:
     initialization_steps_param=int('%%initialization_steps%%')
     initialization_mode_param="%%initialization_mode%%"
     modelpath = ascontext.createTemporaryFolder()
-except:
+else:
     import os
     sc = SparkContext('local')
     sqlCtx = SQLContext(sc)
     # get an input dataframe with sample data by looking in working directory for file DRUG1N.json
     wd = os.getcwd()
-    df = sqlCtx.load("file://"+wd+"/DRUG1N.json","json").repartition(4)
-    predictors = ["BP","Cholesterol","Drug","Sex","Na", "K", "Age"]
+    df = sqlCtx.read.json(sys.argv[2]).repartition(4) # argv[2] of form file://DRUG1N.json
+    predictors = [name for (name,_) in df.dtypes]
     k_param=3
     epsilon_param=0.0001
     max_iterations_param=100
@@ -321,7 +325,7 @@ build_report = mbr.report(lp.count(),lp.getNumPartitions(),
     predictors,datamodel,None,"clustering",
     settings=[("Algorithm","K-Means",[("epsilon",epsilon_param),("maxIterations",max_iterations_param),("seed",seed_param),("runs",runs_param),("initializationSteps",initialization_steps_param),("initializationMode",initialization_mode_param)])])
 
-print(build_report)
+print(build_report.encode("utf-8"))
 
 model.save(sc, modelpath)
 

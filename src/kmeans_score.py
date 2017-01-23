@@ -1,6 +1,6 @@
-script_details = ("kmeans_score.py",0.5)
+script_details = ("kmeans_score.py",0.6)
 
-# COMMON SECTION VERSION 0.7
+# COMMON SECTION VERSION 0.8
 from pyspark.context import SparkContext
 from pyspark.sql.context import SQLContext
 from pyspark import AccumulatorParam
@@ -107,6 +107,7 @@ class DataModelTools(object):
         schema = df.dtypes[:]
         lookup = {}
         for i in range(0,len(schema)):
+            lookup[unicode(schema[i][0],"utf-8")] = i
             lookup[schema[i][0]] = i
 
         target_index = -1
@@ -174,7 +175,7 @@ class DataModelTools(object):
     def checkPredictors(dm,predictors,df):
         schema = {}
         for (name,type) in df.dtypes:
-            schema[name] = type
+            schema[unicode(name,"utf-8")] = type
         for predictor in predictors:
             if predictor not in schema:
                 raise Exception("Predictor %s is missing from input data"%(predictor))
@@ -225,7 +226,7 @@ class ModelBuildReporter(object):
                 predictor_list.append((predictor,"",DataModelTools.getFieldInformation(datamodel,predictor)))
             items.append(("Predictors",len(predictors),predictor_list))
 
-        s = ""
+        s = u""
         s += "Training Summary"+os.linesep
         s += os.linesep
         s += self.format(items)
@@ -233,7 +234,7 @@ class ModelBuildReporter(object):
         return s
 
     def format(self,items):
-        s = ""
+        s = u""
         if items:
             keylen = 0
             for item in items:
@@ -243,7 +244,8 @@ class ModelBuildReporter(object):
             for item in items:
                 key = item[0]
                 val = item[1]
-                s += "    "*self.indent + (key + ":").ljust(keylen+2," ") + str(val) + os.linesep
+                s += u"    "*self.indent + (unicode(key,"utf-8") + u":").ljust(keylen+2,u" ") + unicode(val) + os.linesep
+
                 if len(item) == 3:
                     self.indent += 1
                     s += self.format(item[2])
@@ -258,19 +260,19 @@ import json
 from pyspark.sql.types import StructField, StructType, IntegerType
 
 ascontext=None
-try:
+if len(sys.argv) < 2 or sys.argv[1] != "-test":
     import spss.pyspark.runtime
     ascontext = spss.pyspark.runtime.getContext()
     sc = ascontext.getSparkContext()
     sqlCtx = ascontext.getSparkSQLContext()
     df = ascontext.getSparkInputData()
     schema = ascontext.getSparkInputSchema()
-except:
+else:
     sc = SparkContext('local')
     sqlCtx = SQLContext(sc)
     # get an input dataframe with sample data by looking in working directory for file DRUG1N.json
     wd = os.getcwd()
-    df = sqlCtx.load("file://"+wd+"/DRUG1N.json","json").repartition(4)
+    df = sqlCtx.read.json(sys.argv[2]).repartition(4) # argv[2] of form file://DRUG1N.json
     schema = df.schema
     modelpath_base = "/tmp/model1234"
     modelpath = "file://"+modelpath_base+"/model"
@@ -321,7 +323,7 @@ outdf = sqlCtx.createDataFrame(rdd2,output_schema)
 if ascontext:
     ascontext.setSparkOutputData(outdf)
 else:
-    print(outdf.take(10))
+    print(outdf.take(100))
 
 
 
